@@ -1,0 +1,100 @@
+name: Build Nex Skia m148
+
+on:
+  push:
+    branches: ["chrome/m148", "nex/m148"]
+    paths:
+      - ".github/workflows/build-nex-skia.yml"
+      - "tools/skia_release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GIT_SYNC_DEPS_SKIP_EMSDK: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  windows:
+    name: Windows x64 ${{ matrix.build_type }} (${{ matrix.crt }})
+    runs-on: windows-2022
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build_type: Debug
+            crt: MDd
+          - build_type: Release
+            crt: MD
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Add runner LLVM to PATH
+        shell: pwsh
+        run: |
+          $llvm_bin = "C:\Program Files\LLVM\bin"
+          if (!(Test-Path -LiteralPath "$llvm_bin\clang-cl.exe")) {
+            throw "The runner is missing clang-cl.exe"
+          }
+          $llvm_bin >> $env:GITHUB_PATH
+      - name: Build
+        run: >-
+          python tools/skia_release/build.py --skia-dir .
+          --build-type ${{ matrix.build_type }} --target windows --machine x64
+      - name: Archive
+        run: >-
+          python tools/skia_release/archive.py --skia-dir .
+          --version m148-${{ github.sha }} --build-type ${{ matrix.build_type }}
+          --target windows --machine x64 --classifier ${{ matrix.crt }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Skia-m148-windows-x64-${{ matrix.build_type }}-${{ matrix.crt }}
+          path: Skia-*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  linux:
+    name: Linux x64 ${{ matrix.build_type }} (GCC 11, ABI 1)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-11 g++-11 libfontconfig1-dev libglu1-mesa-dev
+      - name: Build
+        run: >-
+          python tools/skia_release/build.py --skia-dir .
+          --build-type ${{ matrix.build_type }} --target linux --machine x64
+      - name: Archive
+        run: >-
+          python tools/skia_release/archive.py --skia-dir .
+          --version m148-${{ github.sha }} --build-type ${{ matrix.build_type }}
+          --target linux --machine x64 --classifier gcc11-abi1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Skia-m148-linux-x64-${{ matrix.build_type }}-gcc11-abi1
+          path: Skia-*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
