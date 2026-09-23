@@ -75,8 +75,10 @@ def main():
     raise ValueError('This Nex configuration supports native Windows/Linux x64 builds only')
   if build_type not in ('Debug', 'Release'):
     raise ValueError('build-type must be Debug or Release')
-  if common.enable_ganesh() or common.enable_graphite() or common.enable_graphite_dawn() or common.gpu_as_extension():
-    raise ValueError('This Nex configuration builds CPU libraries; GPU extensions are not supported')
+  if (common.enable_graphite() or
+      common.enable_graphite_dawn() or
+      common.gpu_as_extension()):
+    raise ValueError('This Nex configuration does not support Graphite, Dawn, or GPU extensions')
 
   milestone = (skia_dir / 'include/core/SkMilestone.h').read_text(encoding='utf-8')
   if '#define SK_MILESTONE 148' not in milestone:
@@ -106,7 +108,8 @@ def main():
       'skia_enable_pdf=true',
       'skia_enable_skottie=false',
       'skia_enable_tools=false',
-      'skia_enable_ganesh=false',
+      'skia_enable_ganesh=true',
+      'skia_enable_optimize_size=false',
       'skia_enable_graphite=false',
       'skia_use_gl=false',
       'skia_use_vulkan=false',
